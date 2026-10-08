@@ -1,0 +1,725 @@
+local Players = game:GetService("Players")
+local StarterPlayer = game:GetService("StarterPlayer")
+local TweenService = game:GetService("TweenService")
+
+--=====================================================================
+-- CONFIG
+--=====================================================================
+local OWNER_NAMES = {
+    ["sec00925"] = true,
+}
+
+--=====================================================================
+-- 2012 MAXIMALISM PALETTE
+--=====================================================================
+local C = {
+    PANEL_BG     = Color3.fromRGB(192, 192, 192),
+    PANEL_DARK   = Color3.fromRGB(128, 128, 128),
+    HEADER_1     = Color3.fromRGB(94, 148, 220),
+    HEADER_2     = Color3.fromRGB(30, 60, 130),
+    BORDER_DARK  = Color3.fromRGB(0, 0, 0),
+    BORDER_LIGHT = Color3.fromRGB(255, 255, 255),
+    TEXT         = Color3.fromRGB(255, 255, 255),
+    BTN_BLACK    = Color3.fromRGB(30, 30, 30),
+    BTN_RED      = Color3.fromRGB(220, 40, 40),
+    BTN_GREEN    = Color3.fromRGB(40, 200, 60),
+    BTN_BLUE     = Color3.fromRGB(60, 130, 220),
+    BTN_YELLOW   = Color3.fromRGB(240, 200, 40),
+    BTN_ORANGE   = Color3.fromRGB(240, 140, 20),
+    BTN_PURPLE   = Color3.fromRGB(160, 60, 200),
+    BTN_CYAN     = Color3.fromRGB(40, 200, 200),
+    BTN_TEAL     = Color3.fromRGB(20, 160, 140),
+    BTN_LIME     = Color3.fromRGB(140, 220, 40),
+    BTN_PINK     = Color3.fromRGB(240, 100, 180),
+    BTN_GOLD     = Color3.fromRGB(220, 170, 30),
+    BTN_CRIMSON  = Color3.fromRGB(140, 20, 40),
+    BTN_VIOLET   = Color3.fromRGB(180, 100, 255),
+    BTN_AMBER    = Color3.fromRGB(255, 180, 60),
+    BTN_NEON     = Color3.fromRGB(0, 255, 200),
+    BTN_BLOOD    = Color3.fromRGB(180, 0, 60),
+    BTN_ICE      = Color3.fromRGB(140, 200, 255),
+    BTN_FLOWER   = Color3.fromRGB(220, 120, 200),
+    BTN_WOOD     = Color3.fromRGB(160, 100, 50),
+    BTN_ROYAL_GOLD = Color3.fromRGB(255, 215, 0),
+    BTN_LOVE     = Color3.fromRGB(255, 105, 180),
+    BTN_RAVAGER  = Color3.fromRGB(180, 30, 30),
+    BTN_SAITAMA  = Color3.fromRGB(240, 80, 40),
+    BTN_GOJO     = Color3.fromRGB(90, 180, 255),
+    BTN_SOLARIS  = Color3.fromRGB(255, 140, 0),
+    BTN_TERRA    = Color3.fromRGB(80, 160, 80),
+    BTN_XBOW     = Color3.fromRGB(120, 60, 30),
+    BTN_SCYTHE   = Color3.fromRGB(180, 180, 200),
+}
+
+--=====================================================================
+-- R6 CONVERSION
+--=====================================================================
+local spawnMutex = false
+
+local function ConvertToR6(player)
+    while spawnMutex do task.wait(0.05) end
+    spawnMutex = true
+
+    local existing = StarterPlayer:FindFirstChild("StarterCharacter")
+    if existing then existing:Destroy() end
+
+    local d = Instance.new("HumanoidDescription")
+    local ok, template = pcall(function()
+        return Players:CreateHumanoidModelFromDescriptionAsync(d, Enum.HumanoidRigType.R6)
+    end)
+    d:Destroy()
+
+    if not ok or not template then spawnMutex = false return end
+
+    for _, c in template:GetChildren() do
+        if c:IsA("Accessory") or c:IsA("Shirt") or c:IsA("Pants")
+            or c:IsA("ShirtGraphic") or c:IsA("BodyColors")
+            or c:IsA("CharacterMesh") then
+            c:Destroy()
+        end
+    end
+
+    template.Name = "StarterCharacter"
+    template.Parent = StarterPlayer
+
+    player:LoadCharacter()
+    task.wait(0.5)
+    if template.Parent then template:Destroy() end
+    spawnMutex = false
+
+    task.spawn(function()
+        local char = player.Character
+        if not char then return end
+        local hum = char:WaitForChild("Humanoid", 5)
+        if not hum then return end
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        local ok2, desc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserIdAsync(player.UserId)
+        end)
+        if ok2 and desc then pcall(function() hum:ApplyDescription(desc) end) end
+    end)
+end
+
+--=====================================================================
+-- FREEZE / UNFREEZE
+--=====================================================================
+local freezeData = {}
+
+local function FreezePlayer(target)
+    local char = target.Character
+    if not char then return end
+    local hum = char:FindFirstChildWhichIsA("Humanoid")
+    if not hum then return end
+    freezeData[target] = {
+        walk = hum.WalkSpeed, jumpPower = hum.JumpPower,
+        jumpHeight = hum.JumpHeight, useJumpPower = hum.UseJumpPower,
+    }
+    hum.WalkSpeed = 0
+    hum.JumpPower = 0
+    hum.JumpHeight = 0
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then part.Anchored = true end
+    end
+end
+
+local function UnfreezePlayer(target)
+    local char = target.Character
+    if not char then return end
+    local hum = char:FindFirstChildWhichIsA("Humanoid")
+    if not hum then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then part.Anchored = false end
+    end
+    local data = freezeData[target]
+    if data then
+        hum.WalkSpeed = data.walk or 16
+        hum.JumpPower = data.jumpPower or 50
+        hum.JumpHeight = data.jumpHeight or 7.2
+        hum.UseJumpPower = data.useJumpPower
+    else
+        hum.WalkSpeed = 16
+        hum.JumpPower = 50
+    end
+    freezeData[target] = nil
+end
+
+--=====================================================================
+-- 2012 UI HELPERS
+--=====================================================================
+local function corner(parent, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 3)
+    c.Parent = parent
+    return c
+end
+
+local function bevel(parent)
+    local s1 = Instance.new("UIStroke")
+    s1.Color = C.BORDER_DARK
+    s1.Thickness = 2
+    s1.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s1.Parent = parent
+
+    local s2 = Instance.new("UIStroke")
+    s2.Color = C.BORDER_LIGHT
+    s2.Thickness = 1
+    s2.Transparency = 0.5
+    s2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s2.Parent = parent
+    return s1
+end
+
+local function padding(parent, top, bottom, left, right)
+    local p = Instance.new("UIPadding")
+    p.PaddingTop = UDim.new(0, top or 0)
+    p.PaddingBottom = UDim.new(0, bottom or 0)
+    p.PaddingLeft = UDim.new(0, left or 0)
+    p.PaddingRight = UDim.new(0, right or 0)
+    p.Parent = parent
+end
+
+local function listLayout(parent, spacing)
+    local l = Instance.new("UIListLayout")
+    l.Padding = UDim.new(0, spacing or 4)
+    l.SortOrder = Enum.SortOrder.LayoutOrder
+    l.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    l.Parent = parent
+    return l
+end
+
+local function chunkyButton(parent, name, text, color, order, widthScale)
+    local b = Instance.new("TextButton")
+    b.Name = name
+    b.Size = UDim2.new(widthScale or 1, 0, 0, 46)
+    b.BackgroundColor3 = color
+    b.Text = text
+    b.TextColor3 = C.TEXT
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 16
+    b.LayoutOrder = order
+    b.AutoButtonColor = false
+    b.Parent = parent
+
+    b.TextStrokeTransparency = 0
+    b.TextStrokeColor3 = C.BORDER_DARK
+
+    corner(b, 3)
+    bevel(b)
+
+    local shade = Instance.new("Frame")
+    shade.Size = UDim2.new(1, -4, 1, -4)
+    shade.Position = UDim2.new(0, 2, 0, 2)
+    shade.BackgroundTransparency = 0.85
+    shade.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    shade.BorderSizePixel = 0
+    shade.ZIndex = b.ZIndex - 1
+    shade.Parent = b
+    corner(shade, 3)
+
+    b.MouseButton1Down:Connect(function()
+        b.BackgroundColor3 = Color3.fromRGB(
+            math.max(0, color.R * 255 - 40),
+            math.max(0, color.G * 255 - 40),
+            math.max(0, color.B * 255 - 40)
+        )
+    end)
+    b.MouseButton1Up:Connect(function()
+        b.BackgroundColor3 = color
+    end)
+    b.MouseLeave:Connect(function()
+        b.BackgroundColor3 = color
+    end)
+
+    return b
+end
+
+local function iconButton(parent, text, pos, size, color)
+    local b = Instance.new("TextButton")
+    b.Size = size or UDim2.new(0, 34, 0, 26)
+    b.Position = pos
+    b.BackgroundColor3 = color or C.BTN_BLUE
+    b.Text = text
+    b.TextColor3 = C.TEXT
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 12
+    b.AutoButtonColor = false
+    b.TextStrokeTransparency = 0
+    b.TextStrokeColor3 = C.BORDER_DARK
+    b.Parent = parent
+    corner(b, 3)
+    bevel(b)
+    return b
+end
+
+--=====================================================================
+-- ACTION PANEL
+--=====================================================================
+local function OpenActionsPanel(owner, target, mainPanel)
+    local old = mainPanel:FindFirstChild("ActionsPanel")
+    if old then old:Destroy() end
+    local oldBack = mainPanel:FindFirstChild("ActionsBackdrop")
+    if oldBack then oldBack:Destroy() end
+
+    local backdrop = Instance.new("Frame")
+    backdrop.Name = "ActionsBackdrop"
+    backdrop.Size = UDim2.new(1, 0, 1, 0)
+    backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    backdrop.BackgroundTransparency = 0.55
+    backdrop.BorderSizePixel = 0
+    backdrop.ZIndex = 19
+    backdrop.Parent = mainPanel
+    corner(backdrop, 3)
+
+    local ap = Instance.new("Frame")
+    ap.Name = "ActionsPanel"
+    ap.Size = UDim2.new(1, -16, 1, -16)
+    ap.Position = UDim2.new(0, 8, 0, 8)
+    ap.BackgroundColor3 = C.PANEL_BG
+    ap.BorderSizePixel = 0
+    ap.ZIndex = 20
+    ap.Parent = mainPanel
+    corner(ap, 3)
+    bevel(ap)
+
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, -4, 0, 64)
+    header.Position = UDim2.new(0, 2, 0, 2)
+    header.BackgroundColor3 = C.BTN_BLACK
+    header.BorderSizePixel = 0
+    header.ZIndex = 21
+    header.Parent = ap
+    corner(header, 3)
+    bevel(header)
+
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(1, -44, 0, 24)
+    nameLbl.Position = UDim2.new(0, 10, 0, 6)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = target.Name
+    nameLbl.TextColor3 = C.TEXT
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = 16
+    nameLbl.TextStrokeTransparency = 0
+    nameLbl.TextStrokeColor3 = C.BORDER_DARK
+    nameLbl.ZIndex = 22
+    nameLbl.Parent = header
+
+    local dispLbl = Instance.new("TextLabel")
+    dispLbl.Size = UDim2.new(1, -44, 0, 18)
+    dispLbl.Position = UDim2.new(0, 10, 0, 30)
+    dispLbl.BackgroundTransparency = 1
+    dispLbl.Text = "@" .. target.DisplayName
+    dispLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+    dispLbl.TextXAlignment = Enum.TextXAlignment.Left
+    dispLbl.Font = Enum.Font.Gotham
+    dispLbl.TextSize = 12
+    dispLbl.TextStrokeTransparency = 0
+    dispLbl.TextStrokeColor3 = C.BORDER_DARK
+    dispLbl.ZIndex = 22
+    dispLbl.Parent = header
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, -44, 0, 14)
+    subLbl.Position = UDim2.new(0, 10, 0, 48)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Text = "Player Actions"
+    subLbl.TextColor3 = Color3.fromRGB(150, 200, 255)
+    subLbl.TextXAlignment = Enum.TextXAlignment.Left
+    subLbl.Font = Enum.Font.GothamBold
+    subLbl.TextSize = 11
+    subLbl.TextStrokeTransparency = 0
+    subLbl.TextStrokeColor3 = C.BORDER_DARK
+    subLbl.ZIndex = 22
+    subLbl.Parent = header
+
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.new(0, 26, 0, 26)
+    close.Position = UDim2.new(1, -32, 0, 6)
+    close.BackgroundColor3 = C.BTN_RED
+    close.Text = "X"
+    close.TextColor3 = C.TEXT
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 13
+    close.AutoButtonColor = false
+    close.TextStrokeTransparency = 0
+    close.TextStrokeColor3 = C.BORDER_DARK
+    close.ZIndex = 22
+    close.Parent = header
+    corner(close, 3)
+    bevel(close)
+
+    close.MouseButton1Click:Connect(function()
+        backdrop:Destroy()
+        ap:Destroy()
+    end)
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -8, 1, -72)
+    scroll.Position = UDim2.new(0, 4, 0, 68)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 6
+    scroll.ScrollBarImageColor3 = C.PANEL_DARK
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    scroll.ZIndex = 21
+    scroll.Parent = ap
+    listLayout(scroll, 5)
+    padding(scroll, 2, 4, 2, 2)
+
+    local function actionBtn(name, text, color, order, onClick)
+        local b = chunkyButton(scroll, name, text, color, order, 1)
+        b.Size = UDim2.new(1, 0, 0, 40)
+        b.TextSize = 14
+        b.MouseButton1Click:Connect(function()
+            task.spawn(function()
+                local ok, err = pcall(onClick)
+                if not ok then warn("[Actions] " .. tostring(err)) end
+            end)
+        end)
+        return b
+    end
+
+    actionBtn("GivePanel", "Give Panel", C.BTN_BLUE, 1, function()
+        if _G._CreatePanelFor then _G._CreatePanelFor(target) end
+        print("[Server side Gui] Give Panel -> " .. target.Name)
+    end)
+
+    actionBtn("Freeze", "Freeze", C.BTN_CYAN, 2, function()
+        FreezePlayer(target)
+        print("[Server side Gui] Freeze -> " .. target.Name)
+    end)
+
+    actionBtn("Unfreeze", "Unfreeze", C.BTN_GREEN, 3, function()
+        UnfreezePlayer(target)
+        print("[Server side Gui] Unfreeze -> " .. target.Name)
+    end)
+
+    actionBtn("Ban", "Ban", C.BTN_RED, 4, function()
+        print("[Server side Gui] Ban -> " .. target.Name .. " by " .. owner.Name)
+        target:Kick("You banned " .. owner.Name)
+        backdrop:Destroy()
+        ap:Destroy()
+    end)
+end
+
+--=====================================================================
+-- MAIN PANEL
+--=====================================================================
+_G._CreatePanelFor = nil
+
+local function CreatePanel(player)
+    local pg = player:WaitForChild("PlayerGui", 10)
+    if not pg then return end
+    local old = pg:FindFirstChild("ServerSideGui")
+    if old then old:Destroy() end
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "ServerSideGui"
+    sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.Parent = pg
+
+    local mf = Instance.new("Frame")
+    mf.Name = "MainFrame"
+    mf.Size = UDim2.new(0, 290, 0, 270)
+    mf.Position = UDim2.new(0.5, -145, 0.5, -135)
+    mf.BackgroundColor3 = C.PANEL_BG
+    mf.BorderSizePixel = 0
+    mf.Active = true
+    mf.ZIndex = 1
+    mf.Parent = sg
+    corner(mf, 3)
+    bevel(mf)
+
+    local drag = Instance.new("UIDragDetector")
+    drag.Parent = mf
+
+    local tb = Instance.new("Frame")
+    tb.Name = "TitleBar"
+    tb.Size = UDim2.new(1, -4, 0, 36)
+    tb.Position = UDim2.new(0, 2, 0, 2)
+    tb.BackgroundColor3 = C.HEADER_1
+    tb.BorderSizePixel = 0
+    tb.Active = false
+    tb.ZIndex = 2
+    tb.Parent = mf
+    corner(tb, 3)
+    bevel(tb)
+
+    local tbGrad = Instance.new("UIGradient")
+    tbGrad.Color = ColorSequence.new(C.HEADER_1, C.HEADER_2)
+    tbGrad.Rotation = 90
+    tbGrad.Parent = tb
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -160, 1, 0)
+    title.Position = UDim2.new(0, 12, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "SERVER GUI"
+    title.TextColor3 = C.TEXT
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 15
+    title.TextStrokeTransparency = 0
+    title.TextStrokeColor3 = C.BORDER_DARK
+    title.ZIndex = 3
+    title.Active = false
+    title.Parent = tb
+
+    local rb = iconButton(tb, "R6", UDim2.new(1, -42, 0, 5), nil, C.BTN_BLUE)
+    rb.ZIndex = 4
+
+    local pb = iconButton(tb, "Players",
+        UDim2.new(1, -110, 0, 5),
+        UDim2.new(0, 64, 0, 26), C.BTN_ORANGE)
+    pb.ZIndex = 4
+
+    local plist = Instance.new("Frame")
+    plist.Name = "PlayerList"
+    plist.Size = UDim2.new(1, -16, 0, 210)
+    plist.Position = UDim2.new(0, 8, 0, 44)
+    plist.BackgroundColor3 = C.PANEL_BG
+    plist.BorderSizePixel = 0
+    plist.Visible = false
+    plist.ZIndex = 10
+    plist.Parent = mf
+    corner(plist, 3)
+    bevel(plist)
+
+    local plHeader = Instance.new("TextLabel")
+    plHeader.Size = UDim2.new(1, -12, 0, 24)
+    plHeader.Position = UDim2.new(0, 6, 0, 4)
+    plHeader.BackgroundColor3 = C.HEADER_2
+    plHeader.Text = "SELECT PLAYER"
+    plHeader.TextColor3 = C.TEXT
+    plHeader.TextXAlignment = Enum.TextXAlignment.Left
+    plHeader.Font = Enum.Font.GothamBold
+    plHeader.TextSize = 11
+    plHeader.TextStrokeTransparency = 0
+    plHeader.TextStrokeColor3 = C.BORDER_DARK
+    plHeader.ZIndex = 11
+    plHeader.Parent = plist
+    corner(plHeader, 2)
+
+    local plScroll = Instance.new("ScrollingFrame")
+    plScroll.Size = UDim2.new(1, -8, 1, -34)
+    plScroll.Position = UDim2.new(0, 4, 0, 30)
+    plScroll.BackgroundTransparency = 1
+    plScroll.BorderSizePixel = 0
+    plScroll.ScrollBarThickness = 6
+    plScroll.ScrollBarImageColor3 = C.PANEL_DARK
+    plScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    plScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    plScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    plScroll.ZIndex = 11
+    plScroll.Parent = plist
+    listLayout(plScroll, 4)
+    padding(plScroll, 2, 4, 0, 0)
+
+    local function RefreshPlayerList()
+        for _, ch in ipairs(plScroll:GetChildren()) do
+            if ch:IsA("TextButton") then ch:Destroy() end
+        end
+        for i, p in ipairs(Players:GetPlayers()) do
+            if p == player then continue end
+
+            local row = Instance.new("TextButton")
+            row.Size = UDim2.new(1, 0, 0, 40)
+            row.BackgroundColor3 = C.BTN_BLACK
+            row.Text = ""
+            row.AutoButtonColor = false
+            row.LayoutOrder = i
+            row.ZIndex = 12
+            row.Parent = plScroll
+            corner(row, 3)
+            bevel(row)
+
+            local av = Instance.new("ImageLabel")
+            av.Size = UDim2.new(0, 30, 0, 30)
+            av.Position = UDim2.new(0, 5, 0, 5)
+            av.BackgroundColor3 = C.BORDER_DARK
+            av.BorderSizePixel = 0
+            av.ZIndex = 13
+            av.Parent = row
+            corner(av, 2)
+
+            task.spawn(function()
+                local ok, thumb = pcall(function()
+                    return Players:GetUserThumbnailAsync(
+                        p.UserId,
+                        Enum.ThumbnailType.HeadShot,
+                        Enum.ThumbnailSize.Size100x100
+                    )
+                end)
+                if ok and thumb and av.Parent then av.Image = thumb end
+            end)
+
+            local nameLbl = Instance.new("TextLabel")
+            nameLbl.Size = UDim2.new(1, -50, 1, 0)
+            nameLbl.Position = UDim2.new(0, 42, 0, 0)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Text = p.Name
+            nameLbl.TextColor3 = C.TEXT
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+            nameLbl.Font = Enum.Font.GothamBold
+            nameLbl.TextSize = 13
+            nameLbl.TextStrokeTransparency = 0
+            nameLbl.TextStrokeColor3 = C.BORDER_DARK
+            nameLbl.ZIndex = 13
+            nameLbl.Parent = row
+
+            row.MouseButton1Click:Connect(function()
+                plist.Visible = false
+                OpenActionsPanel(player, p, mf)
+            end)
+        end
+    end
+
+    pb.MouseButton1Click:Connect(function()
+        plist.Visible = not plist.Visible
+        if plist.Visible then RefreshPlayerList() end
+    end)
+
+    Players.PlayerAdded:Connect(function() if plist.Visible then RefreshPlayerList() end end)
+    Players.PlayerRemoving:Connect(function() if plist.Visible then RefreshPlayerList() end end)
+
+    local sc = Instance.new("ScrollingFrame")
+    sc.Size = UDim2.new(1, -12, 1, -50)
+    sc.Position = UDim2.new(0, 4, 0, 44)
+    sc.BackgroundTransparency = 1
+    sc.BorderSizePixel = 0
+    sc.ScrollBarThickness = 6
+    sc.ScrollBarImageColor3 = C.PANEL_DARK
+    sc.CanvasSize = UDim2.new(0, 0, 0, 0)
+    sc.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    sc.ScrollingDirection = Enum.ScrollingDirection.Y
+    sc.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
+    sc.ZIndex = 2
+    sc.Parent = mf
+    listLayout(sc, 5)
+    padding(sc, 2, 4, 2, 2)
+
+    local function modButton(name, text, color, order, action)
+        local b = chunkyButton(sc, name, text, color, order, 1)
+        b.MouseButton1Click:Connect(function()
+            print("[Server side Gui] " .. text .. " -> " .. player.Name)
+            task.spawn(function()
+                local ok, err = pcall(action, player)
+                if not ok then warn("[Server side Gui] " .. tostring(err)) end
+            end)
+        end)
+        return b
+    end
+
+    modButton("Goner", "Goner", C.BTN_RED, 1,
+        function(p) require(4513235536).G(p.Name) end)
+    modButton("OneByOne", "1x1x1x1", C.BTN_GREEN, 2,
+        function(p) require(89879398457854).oneeggs(p.Name) end)
+    modButton("DieOfDeathRevolver", "Die of Death revolver", C.BTN_ORANGE, 3,
+        function(p) require(125238124005347).revolver(p.Name) end)
+    modButton("Chara", "Chara", C.BTN_YELLOW, 4,
+        function(p) require(86773386636719).load(p.Name, "Chara") end)
+    modButton("XChara", "XChara", C.BTN_PURPLE, 5,
+        function(p) require(86773386636719).load(p.Name, "XChara") end)
+    modButton("Caducus", "Caducus", C.BTN_BLACK, 6,
+        function(p) require(118326711335248)['Cadacus'](p.Name) end)
+    modButton("GoodCopBadCop", "Good Cop Bad Cop", C.BTN_BLUE, 7,
+        function(p) require(86773386636719).load(p.Name, "GCBC") end)
+    modButton("NeptunianV", "Neptunian V", C.BTN_CYAN, 8,
+        function(p) require(86773386636719).load(p.Name, "Neptunian V") end)
+    modButton("ElioBlasio", "Elio Blasio", C.BTN_TEAL, 9,
+        function(p) require(2998030720):Fire("Elio", p.Name) end)
+    modButton("Copycat", "Copycat", C.BTN_LIME, 10,
+        function(p) require(101212864503945).load(p.Name) end)
+    modButton("Genocider", "Genocider", C.BTN_PINK, 11,
+        function(p) require(86773386636719).load(p.Name, "Genocider") end)
+    modButton("AllSeeingHand", "All Seeing Hand", C.BTN_GOLD, 12,
+        function(p) require(5375399205).Player(p.Name) end)
+    modButton("BlindReaper", "Blind Reaper", C.BTN_CRIMSON, 13,
+        function(p) require(4185644819).a(p.Name) end)
+    modButton("XesterV2", "Xester V2", C.BTN_VIOLET, 14,
+        function(p) require(6099241563).load(p.Name) end)
+    modButton("DieOfDeathFlashlight", "Die of Death Flashlight", C.BTN_AMBER, 15,
+        function(p) require(74321801602000).flashlight(p.Name) end)
+    modButton("SpectrumGlitcher", "Spectrum Glitcher", C.BTN_NEON, 16,
+        function(p) require(86773386636719).load(p.Name, "StarV4") end)
+    modButton("VoodooChild", "Voodoo Child", C.BTN_BLOOD, 17,
+        function(p) require(86773386636719).load(p.Name, "Voodoo Child") end)
+    modButton("KrystalDance", "Krystal Dance", C.BTN_ICE, 18,
+        function(p) require(3940475835).kdancev2(p.Name) end)
+    modButton("ForsakenMAFloweryRework", "Forsaken MA Flowery Rework", C.BTN_FLOWER, 19,
+        function(p) require(112940267573946).Flowery(p.Name) end)
+    modButton("NoobBat", "Noob Bat", C.BTN_WOOD, 20,
+        function(p) require(86773386636719).load(p.Name) end)
+    modButton("GoldenRonald", "Golden Ronald", C.BTN_ROYAL_GOLD, 21,
+        function(p) require(98230031441059).P(p.Name, "GoldenRonald") end)
+    modButton("DieOfDeathLoveshot", "Die of Death Loveshot", C.BTN_LOVE, 22,
+        function(p) require(73746796626532).loveshot(p.Name) end)
+    modButton("RavengerClaws", "Ravenger claws", C.BTN_RAVAGER, 23,
+        function(p) require(72808904532043):GiveScript(p.Name, "Ravager Claws") end)
+    modButton("Saitama", "Saitama", C.BTN_SAITAMA, 24,
+        function(p) require(14499140823)(p.Name, "saitama2") end)
+    modButton("Gojo", "Gojo", C.BTN_GOJO, 25,
+        function(p) require(14499140823)(p.Name, "sorcerer") end)
+    modButton("DualSolaris", "Dual Solaris", C.BTN_SOLARIS, 26,
+        function(p) require(86773386636719).load(p.Name, "Dual Solaris") end)
+
+    modButton("TerraGod", "Terra God", C.BTN_TERRA, 27,
+        function(p) require(86773386636719).load(p.Name, "tgod") end)
+
+    modButton("XBow", "XBow", C.BTN_XBOW, 28,
+        function(p) require(86773386636719).load(p.Name, "XBow") end)
+
+    modButton("Scythe", "Scythe", C.BTN_SCYTHE, 29,
+        function(p) require(86773386636719).load(p.Name, "Scythe") end)
+
+    rb.MouseButton1Click:Connect(function()
+        print("[Server side Gui] R6 -> " .. player.Name)
+        task.spawn(function()
+            player:SetAttribute("WantR6", true)
+            ConvertToR6(player)
+        end)
+    end)
+
+    player.CharacterAdded:Connect(function(char)
+        if not player:GetAttribute("WantR6") then return end
+        task.wait(0.3)
+        local hum = char:FindFirstChildWhichIsA("Humanoid")
+        if hum and hum.RigType == Enum.HumanoidRigType.R6 then
+            hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+            local ok, desc = pcall(function()
+                return Players:GetHumanoidDescriptionFromUserIdAsync(player.UserId)
+            end)
+            if ok and desc then pcall(function() hum:ApplyDescription(desc) end) end
+            return
+        end
+        ConvertToR6(player)
+    end)
+
+    print("[Server side Gui] Panel created for: " .. player.Name)
+end
+
+_G._CreatePanelFor = CreatePanel
+
+--=====================================================================
+-- STARTUP
+--=====================================================================
+local function IsOwner(p)
+    return OWNER_NAMES[p.Name] == true
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+    if IsOwner(p) then task.spawn(CreatePanel, p) end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if IsOwner(p) then
+        task.spawn(CreatePanel, p)
+        print("[Server side Gui] Panel granted to owner: " .. p.Name)
+    end
+end)
+
+print("[Server side Gui] Ready. Owners: sec00925")
